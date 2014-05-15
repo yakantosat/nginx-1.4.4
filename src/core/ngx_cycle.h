@@ -139,6 +139,9 @@ typedef struct {
 #define ngx_is_init_cycle(cycle)  (cycle->conf_ctx == NULL)
 
 
+/* old_cycle表示临时的ngx_cycle_t指针，一般仅用来传递ngx_cycle_t结构体中得配置文件路径等参数。
+返回初始化成功的完整的ngx_cycle_t结构体，该含税会负责初始化ngx_cycle_t中的数据结构，解析配置文件
+加载所有模块，打开监听端口，初始化进程间通信方式等工作。若失败，则返回NULL指针*/
 ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle);
 ngx_int_t ngx_create_pidfile(ngx_str_t *name, ngx_log_t *log);
 void ngx_delete_pidfile(ngx_cycle_t *cycle);
