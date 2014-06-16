@@ -201,8 +201,14 @@ struct ngx_connection_s {
 ngx_listening_t *ngx_create_listening(ngx_conf_t *cf, void *sockaddr,
     socklen_t socklen);
 ngx_int_t ngx_set_inherited_sockets(ngx_cycle_t *cycle);
+
+/* 监听、绑定cycle中listening动态数组指定的响应端口*/
 ngx_int_t ngx_open_listening_sockets(ngx_cycle_t *cycle);
+
+/* 根据nginx.conf中的配置项设置已经监听的句柄 */
 void ngx_configure_listening_sockets(ngx_cycle_t *cycle);
+
+/* 关闭cycle中listening动态数组已经打开的句柄 */
 void ngx_close_listening_sockets(ngx_cycle_t *cycle);
 void ngx_close_connection(ngx_connection_t *c);
 ngx_int_t ngx_connection_local_sockaddr(ngx_connection_t *c, ngx_str_t *s,
