@@ -10,8 +10,14 @@
 #include <nginx.h>
 
 
+/* 在执行不重启服务升级Nginx的操作时，老的Nginx进程会通过环境变量“NGINX”来传递需要打开的监听端口
+   新的Nginx进程会通过ngx_add_inherited_sockets方法来使用已经打开的TCP监听端口*/
 static ngx_int_t ngx_add_inherited_sockets(ngx_cycle_t *cycle);
+
 static ngx_int_t ngx_get_options(int argc, char *const *argv);
+
+/* 用运行Nginx时可能携带的目录参数来初始化cycle，包括初始化运行目录、配置目录，并生成完整地nginx.conf
+   配置文件路径。*/
 static ngx_int_t ngx_process_options(ngx_cycle_t *cycle);
 static ngx_int_t ngx_save_argv(ngx_cycle_t *cycle, int argc, char *const *argv);
 static void *ngx_core_module_create_conf(ngx_cycle_t *cycle);
