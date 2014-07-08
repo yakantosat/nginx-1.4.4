@@ -30,9 +30,9 @@ struct ngx_listening_s {
     int                 rcvbuf; // 内核中对于这个套接字的接收缓冲区大小
     int                 sndbuf; // 内核中对于这个套接字的发送缓冲区大小
 #if (NGX_HAVE_KEEPALIVE_TUNABLE)
-    int                 keepidle;
-    int                 keepintvl;
-    int                 keepcnt;
+    int                 keepidle;  // 设定秒数，在指定秒数之后没有数据来往，则进行TCP层探测
+    int                 keepintvl; // 探测发包间隔时间
+    int                 keepcnt;   // 尝试探测次数
 #endif
 
     /* handler of accepted connection */
