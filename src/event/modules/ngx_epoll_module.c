@@ -154,17 +154,43 @@ ngx_event_module_t  ngx_epoll_module_ctx = {
     &epoll_name,
     ngx_epoll_create_conf,               /* create configuration */
     ngx_epoll_init_conf,                 /* init configuration */
-
+    
+    /* ngx_event_actions_t*/
     {
+        /* 添加事件方法，它将负责把一个感兴趣的事件添加到操作系统提供的事件驱动机制中，
+           这样，在事件发生后，将可以再调用下面的 process_events 时获取这个事件。*/
         ngx_epoll_add_event,             /* add an event */
+        
+        /* 删除事件方法，它将把一个已经存在于事件驱动机制中的事件移除，这样以后即使这个事件
+           发生，调用 process_events 方法也无法再获取这个事件*/
         ngx_epoll_del_event,             /* delete an event */
+        
+        /* 启用一个事件，目前事件框架不会调用这个方法，大部分事件驱动模块对于该方法的实现都是
+           与上面的 add 方法完全一致*/
         ngx_epoll_add_event,             /* enable an event */
+        
+        /* 禁用一个事件，目前事件框架不会调用这个方法，大部分事件驱动模块对于该方法的实现都是
+           与上面的 del 方法完全一致*/
         ngx_epoll_del_event,             /* disable an event */
+        
+        /* 向事件驱动机制中添加一个新的连接，这意味着连接上的读写事件都添加到事件驱动机制中 */
         ngx_epoll_add_connection,        /* add an connection */
+        
+        /* 从事件驱动机制中移除一个连接的读写事件 */
         ngx_epoll_del_connection,        /* delete an connection */
+        
+        /* process_changes仅在多线程环境下会被调用。目前，Nginx 在产品环境下还不会以多线程方式
+           运行。*/
         NULL,                            /* process the changes */
+        
+        /* 在正常的工作循环中，将通过调用 process_events 方法来处理事件。这个方法仅在
+           ngx_process_events_and_timers 方法中调用，它是处理、分发事件的核心 */
         ngx_epoll_process_events,        /* process the events */
+        
+        /* 初始化事件驱动模块的方法 */
         ngx_epoll_init,                  /* init the events */
+        
+        /* 退出事件驱动模块前调用的方法 */
         ngx_epoll_done,                  /* done the events */
     }
 };
