@@ -320,9 +320,12 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
 {
     ngx_epoll_conf_t  *epcf;
 
+    /* 获取 create_conf 中生成的 ngx_epoll_conf_t 结构体。 */
     epcf = ngx_event_get_conf(cycle->conf_ctx, ngx_epoll_module);
 
     if (ep == -1) {
+        
+        /* 调用 epoll_create 在内核中创建 epoll 对象。*/
         ep = epoll_create(cycle->connection_n / 2);
 
         if (ep == -1) {
@@ -343,6 +346,7 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
             ngx_free(event_list);
         }
 
+        /* 初始化 event_list 数组。数组个数是配置项 epoll_events 的参数 */
         event_list = ngx_alloc(sizeof(struct epoll_event) * epcf->events,
                                cycle->log);
         if (event_list == NULL) {
@@ -350,13 +354,16 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
         }
     }
 
+    /* nevents 也是配置项 epoll_events 的参数 */
     nevents = epcf->events;
 
     ngx_io = ngx_os_io;
 
+    /* 设置 ngx_event_actions 接口 */
     ngx_event_actions = ngx_epoll_module_ctx.actions;
 
 #if (NGX_HAVE_CLEAR_EVENT)
+    /* 默认是才用 ET 模式来使用 epoll 的，NGX_USE_CLEAR_EVENT 宏实际上就是在告诉 Nginx 使用 ET 模式 */
     ngx_event_flags = NGX_USE_CLEAR_EVENT
 #else
     ngx_event_flags = NGX_USE_LEVEL_EVENT
