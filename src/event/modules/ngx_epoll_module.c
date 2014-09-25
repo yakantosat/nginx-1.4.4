@@ -422,8 +422,10 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
     ngx_connection_t    *c;
     struct epoll_event   ee;
 
+    /* 每个事件的 data 成员都存放着其对应的 ngx_connection_t 连接*/
     c = ev->data;
 
+    /* 下面会根据 event 参数确定当前事件是读还是写事件，这会决定 events 是加上 EPOLLIN 标识位还是 EPOLLOUT 标志位*/
     events = (uint32_t) event;
 
     if (event == NGX_READ_EVENT) {
@@ -441,6 +443,7 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 #endif
     }
 
+    /* 根据 active 标志位确定是否是活跃事件，以决定到底是修改还是添加事件 */
     if (e->active) {
         op = EPOLL_CTL_MOD;
         events |= prev;
@@ -449,19 +452,24 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
         op = EPOLL_CTL_ADD;
     }
 
+    /* 把 flags 参数加到 events 标识位中 */
     ee.events = events | (uint32_t) flags;
+    
+    /* ptr成员存储的是 ngx_connection_t 连接*/
     ee.data.ptr = (void *) ((uintptr_t) c | ev->instance);
 
     ngx_log_debug3(NGX_LOG_DEBUG_EVENT, ev->log, 0,
                    "epoll add event: fd:%d op:%d ev:%08XD",
                    c->fd, op, ee.events);
 
+    /* 调用epoll_ctl 方法向 epoll 中添加事件或者在 epoll 中修改事件*/
     if (epoll_ctl(ep, op, c->fd, &ee) == -1) {
         ngx_log_error(NGX_LOG_ALERT, ev->log, ngx_errno,
                       "epoll_ctl(%d, %d) failed", op, c->fd);
         return NGX_ERROR;
     }
 
+    /* 将事件的 active 标志位设置为1，表示当前事件是活跃的*/
     ev->active = 1;
 #if 0
     ev->oneshot = (flags & NGX_ONESHOT_EVENT) ? 1 : 0;
@@ -607,6 +615,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "epoll timer: %M", timer);
 
+    /* 调用 epoll_wait 获取事件。timer 参数实在 process_events 调用是传入的*/
     events = epoll_wait(ep, event_list, (int) nevents, timer);
 
     err = (events == -1) ? ngx_errno : 0;
@@ -645,14 +654,24 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
 
     ngx_mutex_lock(ngx_posted_events_mutex);
 
+    /* 遍历本次 epoll_wait 返回的所有事件 */
     for (i = 0; i < events; i++) {
+        
+        /* ptr 成员就是 ngx_connection_t 连接的地址，但最后1位有特殊含义，需要将其屏蔽掉 */
         c = event_list[i].data.ptr;
 
+        /* 将地址的最后一位取出来，用 instance 变量标识 */
         instance = (uintptr_t) c & 1;
+        
+        /* 无论是32位还是64位机器，其地址的最后1位肯定是0，可以用这句把 ngx_connection_t 的地址
+            还原到真正的地址 */
         c = (ngx_connection_t *) ((uintptr_t) c & (uintptr_t) ~1);
 
+
+        /* 取出读事件 */
         rev = c->read;
 
+        /* 判断这个读事件是否为过期事件 */
         if (c->fd == -1 || rev->instance != instance) {
 
             /*
@@ -665,6 +684,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             continue;
         }
 
+        /* 取出事件类型 */
         revents = event_list[i].events;
 
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
@@ -696,7 +716,8 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
 
             revents |= EPOLLIN|EPOLLOUT;
         }
-
+        
+        /* 如果是读事件且该事件是活跃的 */
         if ((revents & EPOLLIN) && rev->active) {
 
             if ((flags & NGX_POST_THREAD_EVENTS) && !rev->accept) {
@@ -706,22 +727,32 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
                 rev->ready = 1;
             }
 
+            /* flags 参数中有 NGX_POST_EVENTS 表示这批事件邀延后处理 */
             if (flags & NGX_POST_EVENTS) {
+                
+                /* 如果要在 post 队列中延后处理该事件，首先要判断它是新连接事件还是普通事件，以决定把它加入到
+                   ngx_posted_accept_events 队列或者 ngx_posted_events 队列中*/
                 queue = (ngx_event_t **) (rev->accept ?
                                &ngx_posted_accept_events : &ngx_posted_events);
 
+                /* 将这个事件添加到响应的延后执行队列中 */
                 ngx_locked_post_event(rev, queue);
 
             } else {
+                
+                /* 立即调用读事件的回调方法来处理这个事件 */
                 rev->handler(rev);
             }
         }
 
+        /* 取出写事件 */
         wev = c->write;
 
         if ((revents & EPOLLOUT) && wev->active) {
 
+            /* 判断这个事件是否为过期事件 */
             if (c->fd == -1 || wev->instance != instance) {
+                /* 当 fd 套接字描述符为-1或者 instance 标志位不相等时，表示这个事件已经过期 */
 
                 /*
                  * the stale event from a file descriptor
@@ -741,9 +772,11 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             }
 
             if (flags & NGX_POST_EVENTS) {
+                /* 将这个事件添加到 post 队列中延后处理 */
                 ngx_locked_post_event(wev, &ngx_posted_events);
 
             } else {
+                /* 立即调用这个写事件的回调方法来处理这个事件 */
                 wev->handler(wev);
             }
         }
